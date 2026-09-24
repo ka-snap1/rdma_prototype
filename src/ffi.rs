@@ -3,6 +3,8 @@
 //! Callers must preserve buffer and handle lifetimes described in fabric_shim.h.
 //! Successful close consumes a handle; failed close keeps it alive. A failed
 //! listener/endpoint open may return a cleanup-only handle when rollback fails.
+//! Failed request endpoint setup also retains its handle: reject the request
+//! before closing that endpoint.
 
 use std::ffi::{c_char, c_int, c_void};
 

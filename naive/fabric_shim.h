@@ -81,7 +81,9 @@ int shim_listener_open(shim_fabric_t *fabric, shim_info_t *info,
                        shim_eq_t *eq, shim_listener_t **out);
 /* Create an active endpoint, bind separate TX/RX CQs and EQ, then enable.
  * Each CQ is dedicated to one endpoint, including after endpoint close.
- * Use CONNREQ info on the server. Rollback follows listener_open rules.
+ * Use CONNREQ info on the server. Failed request setup retains the endpoint:
+ * reject the request before closing that cleanup-only handle. Other rollback
+ * follows listener_open rules.
  */
 int shim_endpoint_open(shim_domain_t *domain, shim_info_t *info,
                        shim_eq_t *eq, shim_cq_t *tx_cq, shim_cq_t *rx_cq,

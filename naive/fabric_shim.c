@@ -49,8 +49,9 @@ int shim_print_info(const char *local_ip, const char *domain_name) {
     hints->addr_format = FI_SOCKADDR_IN;
     /*
     Register send/receive buffers and provide MR descriptors for data operations.
+    Keep the backing allocation valid until its MR is closed (FI_MR_ALLOCATED).
     */
-    hints->domain_attr->mr_mode = FI_MR_LOCAL;
+    hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED;
 
     hints->fabric_attr->prov_name = copy_string("verbs");
     if(hints->fabric_attr->prov_name == NULL) {
@@ -154,8 +155,9 @@ int shim_info_open(
     hints->addr_format = FI_SOCKADDR_IN;
     /*
     Register send/receive buffers and provide MR descriptors for data operations.
+    Keep the backing allocation valid until its MR is closed (FI_MR_ALLOCATED).
     */
-    hints->domain_attr->mr_mode = FI_MR_LOCAL;
+    hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED;
     hints->fabric_attr->prov_name = copy_string("verbs");
     if(hints->fabric_attr->prov_name == NULL) {
         ret = -FI_ENOMEM;
@@ -451,7 +453,11 @@ int shim_endpoint_open(shim_domain_t *domain, shim_info_t *info,
     if (ret == 0) ret = fi_ep_bind(obj->raw, &rx->raw->fid, FI_RECV);
     if (ret == 0) ret = fi_enable(obj->raw);
     if (ret != 0) {
-        if (shim_endpoint_close(obj) != 0) *out = obj;
+        /* A request endpoint owns the CM identifier needed by fi_reject.
+         * Keep it alive so the caller can reject before closing the endpoint.
+         */
+        if (info->raw->handle != NULL) *out = obj;
+        else if (shim_endpoint_close(obj) != 0) *out = obj;
         return ret;
     }
     obj->ready = 1;
@@ -477,7 +483,8 @@ int shim_reject(shim_listener_t *listener, shim_info_t *info)
     if (listener == NULL || !listener->ready || info == NULL ||
         info->raw->handle == NULL) return -FI_EINVAL;
     int ret = fi_reject(listener->raw, info->raw->handle, NULL, 0);
-    if (ret == 0) info->raw->handle = NULL;
+    /* verbs 1.11 frees the request even when its reject call reports failure. */
+    info->raw->handle = NULL;
     return ret;
 }
 
